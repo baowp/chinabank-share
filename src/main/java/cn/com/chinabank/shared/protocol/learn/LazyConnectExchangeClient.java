@@ -1,4 +1,4 @@
-package cn.com.chinabank.shared.dubbo.protocol;
+package cn.com.chinabank.shared.protocol.learn;
 
 import com.alibaba.dubbo.common.Constants;
 import com.alibaba.dubbo.common.Parameters;

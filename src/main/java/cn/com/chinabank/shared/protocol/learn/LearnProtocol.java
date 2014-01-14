@@ -1,4 +1,4 @@
-package cn.com.chinabank.shared.dubbo.protocol;
+package cn.com.chinabank.shared.protocol.learn;
 
 import com.alibaba.dubbo.common.Constants;
 import com.alibaba.dubbo.common.URL;
@@ -9,11 +9,21 @@ import com.alibaba.dubbo.common.utils.StringUtils;
 import com.alibaba.dubbo.remoting.Channel;
 import com.alibaba.dubbo.remoting.RemotingException;
 import com.alibaba.dubbo.remoting.Transporter;
-import com.alibaba.dubbo.remoting.exchange.*;
+import com.alibaba.dubbo.remoting.exchange.ExchangeChannel;
+import com.alibaba.dubbo.remoting.exchange.ExchangeClient;
+import com.alibaba.dubbo.remoting.exchange.ExchangeHandler;
+import com.alibaba.dubbo.remoting.exchange.ExchangeServer;
+import com.alibaba.dubbo.remoting.exchange.Exchangers;
 import com.alibaba.dubbo.remoting.exchange.support.ExchangeHandlerAdapter;
-import com.alibaba.dubbo.rpc.*;
+import com.alibaba.dubbo.rpc.Exporter;
+import com.alibaba.dubbo.rpc.Invocation;
+import com.alibaba.dubbo.rpc.Invoker;
+import com.alibaba.dubbo.rpc.RpcContext;
+import com.alibaba.dubbo.rpc.RpcException;
+import com.alibaba.dubbo.rpc.RpcInvocation;
 import com.alibaba.dubbo.rpc.protocol.AbstractProtocol;
-import com.alibaba.dubbo.rpc.protocol.dubbo.*;
+import com.alibaba.dubbo.rpc.protocol.dubbo.DubboExporter;
+import com.alibaba.dubbo.rpc.protocol.dubbo.DubboInvoker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -142,13 +152,13 @@ public class LearnProtocol extends AbstractProtocol {
         exporterMap.put(key, exporter);
 
         //export an stub service for dispaching event
-        Boolean isStubSupportEvent = url.getParameter(Constants.STUB_EVENT_KEY,Constants.DEFAULT_STUB_EVENT);
+        Boolean isStubSupportEvent = url.getParameter(Constants.STUB_EVENT_KEY, Constants.DEFAULT_STUB_EVENT);
         Boolean isCallbackservice = url.getParameter(Constants.IS_CALLBACK_SERVICE, false);
-        if (isStubSupportEvent && !isCallbackservice){
+        if (isStubSupportEvent && !isCallbackservice) {
             String stubServiceMethods = url.getParameter(Constants.STUB_EVENT_METHODS_KEY);
-            if (stubServiceMethods == null || stubServiceMethods.length() == 0 ){
-                if (logger.isWarnEnabled()){
-                    logger.warn(new IllegalStateException("consumer [" +url.getParameter(Constants.INTERFACE_KEY) +
+            if (stubServiceMethods == null || stubServiceMethods.length() == 0) {
+                if (logger.isWarnEnabled()) {
+                    logger.warn(new IllegalStateException("consumer [" + url.getParameter(Constants.INTERFACE_KEY) +
                             "], has set stubproxy support event ,but no stub methods founded.").getMessage());
                 }
             } else {
@@ -165,7 +175,7 @@ public class LearnProtocol extends AbstractProtocol {
         // find server.
         String key = url.getAddress();
         //client 也可以暴露一个只有server可以调用的服务。
-        boolean isServer = url.getParameter(Constants.IS_SERVER_KEY,true);
+        boolean isServer = url.getParameter(Constants.IS_SERVER_KEY, true);
         if (isServer) {
             ExchangeServer server = serverMap.get(key);
             if (server == null) {
@@ -184,10 +194,10 @@ public class LearnProtocol extends AbstractProtocol {
         url = url.addParameterIfAbsent(Constants.HEARTBEAT_KEY, String.valueOf(Constants.DEFAULT_HEARTBEAT));
         String str = url.getParameter(Constants.SERVER_KEY, Constants.DEFAULT_REMOTING_SERVER);
 
-        if (str != null && str.length() > 0 && ! ExtensionLoader.getExtensionLoader(Transporter.class).hasExtension(str))
+        if (str != null && str.length() > 0 && !ExtensionLoader.getExtensionLoader(Transporter.class).hasExtension(str))
             throw new RpcException("Unsupported server type: " + str + ", url: " + url);
 
-        url = url.addParameter(Constants.CODEC_KEY, Version.isCompatibleVersion() ? COMPATIBLE_CODEC_NAME : DubboCodec.NAME);
+        url = url.addParameter(Constants.CODEC_KEY, Version.isCompatibleVersion() ? COMPATIBLE_CODEC_NAME : LearnCodec.NAME);
         ExchangeServer server;
         try {
             server = Exchangers.bind(url, requestHandler);
@@ -211,20 +221,21 @@ public class LearnProtocol extends AbstractProtocol {
         invokers.add(invoker);
         return invoker;
     }
-    private ExchangeClient[] getClients(URL url){
+
+    private ExchangeClient[] getClients(URL url) {
         //是否共享连接
         boolean service_share_connect = false;
         int connections = url.getParameter(Constants.CONNECTIONS_KEY, 0);
         //如果connections不配置，则共享连接，否则每服务每连接
-        if (connections == 0){
+        if (connections == 0) {
             service_share_connect = true;
             connections = 1;
         }
 
         ExchangeClient[] clients = new ExchangeClient[connections];
         for (int i = 0; i < clients.length; i++) {
-            if (service_share_connect){
-               clients[i] = getSharedClient(url);
+            if (service_share_connect) {
+                clients[i] = getSharedClient(url);
             } else {
                 clients[i] = initClient(url);
             }
@@ -242,23 +253,23 @@ public class LearnProtocol extends AbstractProtocol {
 
         String version = url.getParameter(Constants.DUBBO_VERSION_KEY);
         boolean compatible = (version != null && version.startsWith("1.0."));
-        url = url.addParameter(Constants.CODEC_KEY, Version.isCompatibleVersion() && compatible ? COMPATIBLE_CODEC_NAME : DubboCodec.NAME);
+        url = url.addParameter(Constants.CODEC_KEY, Version.isCompatibleVersion() && compatible ? COMPATIBLE_CODEC_NAME : LearnCodec.NAME);
         //默认开启heartbeat
         url = url.addParameterIfAbsent(Constants.HEARTBEAT_KEY, String.valueOf(Constants.DEFAULT_HEARTBEAT));
 
         // BIO存在严重性能问题，暂时不允许使用
-        if (str != null && str.length() > 0 && ! ExtensionLoader.getExtensionLoader(Transporter.class).hasExtension(str)) {
+        if (str != null && str.length() > 0 && !ExtensionLoader.getExtensionLoader(Transporter.class).hasExtension(str)) {
             throw new RpcException("Unsupported client type: " + str + "," +
                     " supported client type is " + StringUtils.join(ExtensionLoader.getExtensionLoader(Transporter.class).getSupportedExtensions(), " "));
         }
 
-        ExchangeClient client ;
+        ExchangeClient client;
         try {
             //设置连接应该是lazy的
-            if (url.getParameter(Constants.LAZY_CONNECT_KEY, false)){
-                client = new LazyConnectExchangeClient(url ,requestHandler);
+            if (url.getParameter(Constants.LAZY_CONNECT_KEY, false)) {
+                client = new LazyConnectExchangeClient(url, requestHandler);
             } else {
-                client = Exchangers.connect(url ,requestHandler);
+                client = Exchangers.connect(url, requestHandler);
             }
         } catch (RemotingException e) {
             throw new RpcException("Fail to create remoting client for service(" + url
@@ -266,14 +277,15 @@ public class LearnProtocol extends AbstractProtocol {
         }
         return client;
     }
+
     /**
-     *获取共享连接
+     * 获取共享连接
      */
-    private ExchangeClient getSharedClient(URL url){
+    private ExchangeClient getSharedClient(URL url) {
         String key = url.getAddress();
         ReferenceCountExchangeClient client = referenceClientMap.get(key);
-        if ( client != null ){
-            if ( !client.isClosed()){
+        if (client != null) {
+            if (!client.isClosed()) {
                 client.incrementAndGetCount();
                 return client;
             } else {
